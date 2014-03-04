@@ -1,0 +1,205 @@
+package com.cafyne.service.impl;
+
+import com.cafyne.Constants;
+import com.cafyne.dataaccess.model.FacebookProfile;
+import com.cafyne.dataaccess.model.InstagramProfile;
+import com.cafyne.dataaccess.model.LinkedInProfile;
+import com.cafyne.dataaccess.model.TwitterProfile;
+import com.cafyne.dataaccess.util.CafyneClientUtil;
+import com.cafyne.service.CafyneService;
+import com.google.gson.Gson;
+import org.json.JSONObject;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.annotation.Resource;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Created with IntelliJ IDEA.
+ * User: muthusamy.s
+ * Date: 7/8/13
+ * Time: 12:27 PM
+ */
+
+@Service(value = "cafyneService")
+@Transactional
+public class CafyneServiceImpl implements CafyneService {
+
+
+    @Resource(name = "mongoTemplate")
+    private MongoTemplate mongoTemplate;
+
+    private CafyneClientUtil cafyneClientUtil = new CafyneClientUtil();
+    private Gson gson = new Gson();
+
+    /**
+     * To save the profile
+     *
+     * @param profileJson the profileJson
+     * @return true if saved successfully
+     */
+    public boolean saveProfile(String profileJson, String socialMediaType) {
+        try {
+            if (socialMediaType.equals(Constants.LinkedIn)) {
+                LinkedInProfile linkedInProfile = gson.fromJson(profileJson, LinkedInProfile.class);
+                mongoTemplate.save(linkedInProfile, Constants.COLLECTIONS_PREFIX + Constants.LinkedIn + Constants.COLLECTIONS_SUFFIX_PROFILE);
+            } else if (socialMediaType.equals(Constants.Twitter)) {
+                TwitterProfile twitterProfile = gson.fromJson(profileJson, TwitterProfile.class);
+                mongoTemplate.save(twitterProfile, Constants.COLLECTIONS_PREFIX + Constants.Twitter + Constants.COLLECTIONS_SUFFIX_PROFILE);
+            } else if (socialMediaType.equals(Constants.Facebook)) {
+                FacebookProfile facebookProfile = gson.fromJson(profileJson, FacebookProfile.class);
+                mongoTemplate.save(facebookProfile, Constants.COLLECTIONS_PREFIX + Constants.Facebook + Constants.COLLECTIONS_SUFFIX_PROFILE);
+            } else if (socialMediaType.equals(Constants.Instagram)) {
+                InstagramProfile instagramProfile = gson.fromJson(profileJson, InstagramProfile.class);
+                mongoTemplate.save(instagramProfile, Constants.COLLECTIONS_PREFIX + Constants.Instagram + Constants.COLLECTIONS_SUFFIX_PROFILE);
+            }
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
+    public String searchProfiles(String firstName, String lastName) {
+
+        StringBuilder linkedInBuffer = new StringBuilder();
+        StringBuilder twitterBuffer = new StringBuilder();
+        StringBuilder instagramBuffer = new StringBuilder();
+        StringBuilder facebookBuffer = new StringBuilder();
+        String combinedJson;
+
+        Query searchLinkedInQuery = new Query().addCriteria(Criteria.where("fn").regex(firstName, "i"))
+                .addCriteria(Criteria.where("ln").regex(lastName, "i"));
+        List<LinkedInProfile> linkedInProfileList = mongoTemplate.find(searchLinkedInQuery, LinkedInProfile.class, Constants.COLLECTIONS_PREFIX + Constants.LinkedIn + Constants.COLLECTIONS_SUFFIX_PROFILE);
+        for (LinkedInProfile linkedInProfile : linkedInProfileList) {
+            JSONObject linkedInProfileJsonObj = new JSONObject(linkedInProfile);
+            linkedInBuffer.append(linkedInProfileJsonObj).append(",");
+        }
+        if (linkedInBuffer.length() != Constants.ZERO) {
+            linkedInBuffer.deleteCharAt(linkedInBuffer.length() - 1);
+        }
+
+        Query searchTwitterQuery = new Query().addCriteria(Criteria.where("userName").regex("^" + firstName + " " + lastName + "$", "i"));
+        List<TwitterProfile> twitterProfileList = mongoTemplate.find(searchTwitterQuery, TwitterProfile.class, Constants.COLLECTIONS_PREFIX + Constants.Twitter + Constants.COLLECTIONS_SUFFIX_PROFILE);
+        for (TwitterProfile twitterProfile : twitterProfileList) {
+            JSONObject twitterProfileJsonObj = new JSONObject(twitterProfile);
+            twitterBuffer.append(twitterProfileJsonObj).append(",");
+        }
+        if (twitterBuffer.length() != Constants.ZERO) {
+            twitterBuffer.deleteCharAt(twitterBuffer.length() - 1);
+        }
+
+        Query searchInstagramQuery = new Query().addCriteria(Criteria.where("fullName").regex("^" + firstName + " " + lastName + "$", "i"));
+        List<InstagramProfile> instagramProfileList = mongoTemplate.find(searchInstagramQuery, InstagramProfile.class, Constants.COLLECTIONS_PREFIX + Constants.Instagram + Constants.COLLECTIONS_SUFFIX_PROFILE);
+        for (InstagramProfile instagramProfile : instagramProfileList) {
+            JSONObject instagramProfileJsonObj = new JSONObject(instagramProfile);
+            instagramBuffer.append(instagramProfileJsonObj).append(",");
+        }
+        if (instagramBuffer.length() != Constants.ZERO) {
+            instagramBuffer.deleteCharAt(instagramBuffer.length() - 1);
+        }
+
+        Query searchFacebookQuery = new Query().addCriteria(Criteria.where("firstName").regex(firstName, "i"))
+                .addCriteria(Criteria.where("lastName").regex(lastName, "i"));
+        List<FacebookProfile> facebookProfileList = mongoTemplate.find(searchFacebookQuery, FacebookProfile.class, Constants.COLLECTIONS_PREFIX + Constants.Facebook + Constants.COLLECTIONS_SUFFIX_PROFILE);
+        for (FacebookProfile facebookProfile : facebookProfileList) {
+            JSONObject facebookProfileJsonObj = new JSONObject(facebookProfile);
+            facebookBuffer.append(facebookProfileJsonObj).append(",");
+        }
+        if (facebookBuffer.length() != Constants.ZERO) {
+            facebookBuffer.deleteCharAt(facebookBuffer.length() - 1);
+        }
+        combinedJson = cafyneClientUtil.generateCombinedJson(linkedInBuffer.toString(), twitterBuffer.toString(), instagramBuffer.toString(), facebookBuffer.toString());
+
+        if (combinedJson.length() == Constants.ZERO) {
+            return cafyneClientUtil.getErrorJson();
+        }
+        return combinedJson;
+    }
+
+
+    /**
+     * To get the industry as map
+     *
+     * @return the industry map
+     */
+    public Map<Integer, String> createIndustryMap() {
+        Map<Integer, String> industryMap = new HashMap<Integer, String>();
+
+        industryMap.put(47, "Accounting");
+        industryMap.put(94, "Airlines/Aviation");
+        industryMap.put(120, "Alternative Dispute Resolution");
+        industryMap.put(125, "Alternative Medicine");
+        industryMap.put(127, "Animation");
+        industryMap.put(19, "Apparel & Fashion");
+        industryMap.put(50, "Architecture & Planning");
+        industryMap.put(111, "Arts and Crafts");
+        industryMap.put(53, "Automotive");
+        industryMap.put(52, "Aviation & Aerospace");
+        industryMap.put(41, "Banking");
+        industryMap.put(12, "Biotechnology");
+        industryMap.put(36, "Broadcast Media");
+        industryMap.put(49, "Building Materials");
+        industryMap.put(138, "Business Supplies and Equipment");
+        industryMap.put(129, "Capital Markets");
+        industryMap.put(54, "Chemicals");
+        industryMap.put(90, "Civic & Social Organization");
+        industryMap.put(51, "Civil Engineering");
+        industryMap.put(128, "Commercial Real Estate");
+        industryMap.put(118, "Computer & Network Security");
+        industryMap.put(109, "Computer Games");
+        industryMap.put(3, "Computer Hardware");
+        industryMap.put(5, "Computer Networking");
+        industryMap.put(4, "Computer Software");
+        industryMap.put(48, "Construction");
+        industryMap.put(24, "Consumer Electronics");
+        industryMap.put(25, "Consumer Goods");
+        industryMap.put(91, "Consumer Services");
+        industryMap.put(18, "Cosmetics");
+        industryMap.put(65, "Dairy");
+        industryMap.put(1, "Defense & Space");
+        industryMap.put(99, "Design");
+        industryMap.put(69, "Education Management");
+        industryMap.put(132, "E-Learning");
+        industryMap.put(112, "Electrical/Electronic Manufacturing");
+        industryMap.put(28, "Entertainment");
+        industryMap.put(86, "Environmental Services");
+        industryMap.put(110, "Events Services");
+        industryMap.put(76, "Executive Office");
+        industryMap.put(122, "Facilities Services");
+        industryMap.put(43, "Financial Services");
+        industryMap.put(38, "Fine Art");
+        industryMap.put(66, "Fishery");
+        industryMap.put(34, "Food & Beverages");
+        industryMap.put(23, "Food Production");
+        industryMap.put(101, "Fund-Raising");
+        industryMap.put(26, "Furniture");
+        industryMap.put(29, "Gambling & Casinos");
+        industryMap.put(145, "Glass, Ceramics & Concrete");
+        industryMap.put(75, "Government Administration");
+        industryMap.put(148, "Government Relations");
+        industryMap.put(140, "Graphic Design");
+        industryMap.put(124, "Health, Wellness and Fitness");
+        industryMap.put(68, "Higher Education");
+        industryMap.put(14, "Hospital & Health Care");
+        industryMap.put(31, "Hospitality");
+        industryMap.put(137, "Human Resources");
+        industryMap.put(134, "Import and Export");
+        industryMap.put(88, "Individual & Family Services");
+        industryMap.put(147, "Industrial Automation");
+        industryMap.put(84, "Information Services");
+        industryMap.put(96, "Information Technology and Services");
+        industryMap.put(42, "Insurance");
+        industryMap.put(74, "International Affairs");
+
+        return industryMap;
+    }
+
+}
